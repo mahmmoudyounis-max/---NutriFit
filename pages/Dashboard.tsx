@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { UserProfile, DietPlan } from '../types';
+import { UserProfile, DietPlan, ActivityLevel, Goal } from '../types';
 import { generateDietPlan } from '../services/geminiService';
 import { savePlan, getPlan, saveUser, updateUserPaymentStatus } from '../services/storage';
-import { AlertCircle, Check, Loader2, RefreshCw, Lock, CreditCard, Mail } from 'lucide-react';
+import { AlertCircle, Check, Loader2, RefreshCw, Lock, CreditCard, Mail, Edit, X, Save } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 interface DashboardProps {
@@ -16,6 +16,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, setUser }) => {
   const [error, setError] = useState('');
   const [showPayment, setShowPayment] = useState(!user.isPremium);
   const [paymentSuccessMsg, setPaymentSuccessMsg] = useState('');
+  
+  // Edit Mode State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    weight: user.weight,
+    height: user.height,
+    age: user.age,
+    activityLevel: user.activityLevel,
+    goal: user.goal
+  });
 
   useEffect(() => {
     // Load existing plan if available
@@ -24,6 +34,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, setUser }) => {
       setPlan(existingPlan);
     }
     setShowPayment(!user.isPremium);
+    
+    // Sync edit form with user
+    setEditForm({
+        weight: user.weight,
+        height: user.height,
+        age: user.age,
+        activityLevel: user.activityLevel,
+        goal: user.goal
+    });
   }, [user]);
 
   const handleGeneratePlan = async () => {
@@ -51,6 +70,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, setUser }) => {
         setPaymentSuccessMsg(`تم الدفع بنجاح عبر ${method === 'paypal' ? 'PayPal' : 'Payoneer'}. تم إرسال نسخة من الخطة إلى بريدك الإلكتروني وإشعار إلى الإدارة.`);
         // Here we would call an API to send the email to mahmmoudyounid@gmail.com
     }, 1500);
+  };
+
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setEditForm({ 
+        ...editForm, 
+        [e.target.name]: e.target.type === 'number' ? Number(e.target.value) : e.target.value 
+    });
+  };
+
+  const saveProfileChanges = () => {
+    const updatedUser = { ...user, ...editForm };
+    setUser(updatedUser);
+    saveUser(updatedUser);
+    setIsEditing(false);
   };
 
   // Helper to calculate BMR and TDEE
@@ -155,18 +188,94 @@ const Dashboard: React.FC<DashboardProps> = ({ user, setUser }) => {
           </div>
       )}
 
+      {/* Edit Modal */}
+      {isEditing && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setIsEditing(false)}></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-right overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+              <div className="absolute top-0 left-0 pt-4 pl-4">
+                <button
+                  type="button"
+                  className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
+                  onClick={() => setIsEditing(false)}
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              <div>
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                  <Edit className="h-6 w-6 text-primary" />
+                </div>
+                <div className="mt-3 text-center sm:mt-5">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">تحديث بياناتي</h3>
+                  <div className="mt-4 text-right space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">الوزن (كجم)</label>
+                        <input name="weight" type="number" value={editForm.weight} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">الطول (سم)</label>
+                        <input name="height" type="number" value={editForm.height} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">العمر</label>
+                        <input name="age" type="number" value={editForm.age} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">مستوى النشاط</label>
+                        <select name="activityLevel" value={editForm.activityLevel} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
+                            <option value={ActivityLevel.Sedentary}>خامل</option>
+                            <option value={ActivityLevel.Light}>خفيف</option>
+                            <option value={ActivityLevel.Moderate}>متوسط</option>
+                            <option value={ActivityLevel.Active}>نشط</option>
+                            <option value={ActivityLevel.VeryActive}>نشط جداً</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">الهدف</label>
+                        <select name="goal" value={editForm.goal} onChange={handleEditChange} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
+                            <option value={Goal.LoseWeight}>إنقاص الوزن</option>
+                            <option value={Goal.Maintain}>الحفاظ على الوزن</option>
+                            <option value={Goal.GainMuscle}>بناء عضلات</option>
+                        </select>
+                      </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 sm:mt-6">
+                <button
+                  type="button"
+                  onClick={saveProfileChanges}
+                  className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary sm:text-sm"
+                >
+                  حفظ التغييرات
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow p-6 flex items-center justify-between border-r-4 border-primary">
+        <div className="bg-white rounded-xl shadow p-6 flex items-center justify-between border-r-4 border-primary relative group">
           <div>
-            <p className="text-sm text-gray-500">مؤشر كتلة الجسم (BMI)</p>
+            <div className="flex items-center">
+                 <p className="text-sm text-gray-500 ml-2">مؤشر كتلة الجسم (BMI)</p>
+                 <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-primary"><Edit size={14} /></button>
+            </div>
             <p className={`text-3xl font-bold ${bmiColor}`}>{stats.bmi}</p>
             <p className="text-sm text-gray-400">{bmiCategory}</p>
           </div>
           <ActivityChartIcon color={bmiColor.includes('red') ? '#ef4444' : '#10b981'} />
         </div>
         <div className="bg-white rounded-xl shadow p-6 border-r-4 border-secondary">
-           <p className="text-sm text-gray-500 mb-1">الاحتياج اليومي من السعرات (TDEE)</p>
+           <div className="flex items-center">
+             <p className="text-sm text-gray-500 mb-1 ml-2">الاحتياج اليومي (TDEE)</p>
+             <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-primary"><Edit size={14} /></button>
+           </div>
            <div className="flex items-baseline">
              <p className="text-3xl font-bold text-gray-800">{stats.tdee}</p>
              <span className="mr-2 text-gray-500">سعرة / يوم</span>
